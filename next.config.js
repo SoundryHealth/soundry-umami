@@ -47,12 +47,12 @@ if (forceSSL) {
 
 const rewrites = [];
 
-if (collectApiEndpoint) {
-  rewrites.push({
-    source: collectApiEndpoint,
-    destination: '/api/send',
-  });
-}
+// if (collectApiEndpoint) {
+//   rewrites.push({
+//     source: collectApiEndpoint,
+//     destination: '/api/send',
+//   });
+// }
 
 if (trackerScriptName) {
   const names = trackerScriptName?.split(',').map(name => name.trim());
