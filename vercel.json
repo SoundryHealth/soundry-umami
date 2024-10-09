@@ -9,7 +9,11 @@
 				},
 				{
 					"key": "Access-Control-Allow-Origin",
-					"value": "https://*.soundryhealth.com"
+					"value": "https://clinic.soundryhealth.com"
+				},
+				{
+					"key": "Access-Control-Allow-Origin",
+					"value": "https://dev.soundryhealth.com"
 				},
 				{
 					"key": "Access-Control-Allow-Methods",
