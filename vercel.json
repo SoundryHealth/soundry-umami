@@ -8,14 +8,6 @@
 					"value": "https://soundryhealth.com"
 				},
 				{
-					"key": "Access-Control-Allow-Origin",
-					"value": "https://clinic.soundryhealth.com"
-				},
-				{
-					"key": "Access-Control-Allow-Origin",
-					"value": "https://dev.soundryhealth.com"
-				},
-				{
 					"key": "Access-Control-Allow-Methods",
 					"value": "GET, POST, OPTIONS"
 				},
