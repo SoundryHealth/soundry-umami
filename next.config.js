@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
-require("dotenv").config();
-const path = require("path");
-const pkg = require("./package.json");
+require('dotenv').config();
+const path = require('path');
+const pkg = require('./package.json');
+
+const TRACKER_SCRIPT = '/script.js';
 
 const basePath = process.env.BASE_PATH;
 const collectApiEndpoint = process.env.COLLECT_API_ENDPOINT;
@@ -14,6 +16,7 @@ const forceSSL = process.env.FORCE_SSL;
 const frameAncestors = process.env.ALLOWED_FRAME_URLS;
 const privateMode = process.env.PRIVATE_MODE;
 const trackerScriptName = process.env.TRACKER_SCRIPT_NAME;
+const trackerScriptURL = process.env.TRACKER_SCRIPT_URL;
 
 const contentSecurityPolicy = [
 	`default-src 'self'`,
@@ -24,47 +27,63 @@ const contentSecurityPolicy = [
 	`frame-ancestors 'self' ${frameAncestors}`,
 ];
 
-const headers = [
-	{
-		key: "X-DNS-Prefetch-Control",
-		value: "on",
-	},
-	{
-		key: "Content-Security-Policy",
-		value: contentSecurityPolicy
-			.join(";")
-			.replace(/\s{2,}/g, " ")
-			.trim(),
-	},
+const defaultHeaders = [
+  {
+    key: 'X-DNS-Prefetch-Control',
+    value: 'on',
+  },
+  {
+    key: 'Content-Security-Policy',
+    value: contentSecurityPolicy
+      .join(';')
+      .replace(/\s{2,}/g, ' ')
+      .trim(),
+  },
 ];
 
 if (forceSSL) {
-	headers.push({
-		key: "Strict-Transport-Security",
-		value: "max-age=63072000; includeSubDomains; preload",
-	});
+  defaultHeaders.push({
+    key: 'Strict-Transport-Security',
+    value: 'max-age=63072000; includeSubDomains; preload',
+  });
 }
 
+const trackerHeaders = [
+  {
+    key: 'Access-Control-Allow-Origin',
+    value: '*',
+  },
+  {
+    key: 'Cache-Control',
+    value: 'public, max-age=86400, must-revalidate',
+  },
+];
+
+const headers = [
+  {
+    source: '/:path*',
+    headers: defaultHeaders,
+  },
+  {
+    source: TRACKER_SCRIPT,
+    headers: trackerHeaders,
+  },
+];
+
 const rewrites = [];
+
+if (trackerScriptURL) {
+  rewrites.push({
+    source: TRACKER_SCRIPT,
+    destination: trackerScriptURL,
+  });
+}
 
 if (collectApiEndpoint) {
 	rewrites.push({
 		source: collectApiEndpoint,
 		destination: "/api/send",
 	});
-}
-
-if (trackerScriptName) {
-	const names = trackerScriptName?.split(",").map((name) => name.trim());
-
-	if (names) {
-		names.forEach((name) => {
-			rewrites.push({
-				source: `/${name.replace(/^\/+/, "")}`,
-				destination: "/script.js",
-			});
-		});
-	}
 }
 
 const redirects = [
@@ -84,6 +103,27 @@ const redirects = [
 		permanent: true,
 	},
 ];
+
+// Adding rewrites + headers for all alternative tracker script names.
+if (trackerScriptName) {
+  const names = trackerScriptName?.split(',').map(name => name.trim());
+
+  if (names) {
+    names.forEach(name => {
+      const normalizedSource = `/${name.replace(/^\/+/, '')}`;
+
+      rewrites.push({
+        source: normalizedSource,
+        destination: TRACKER_SCRIPT,
+      });
+
+      headers.push({
+        source: normalizedSource,
+        headers: trackerHeaders,
+      });
+    });
+  }
+}
 
 if (cloudMode && cloudUrl) {
 	redirects.push({
@@ -152,32 +192,27 @@ const config = {
 
 		config.resolve.alias["public"] = path.resolve("./public");
 
-		return config;
-	},
-	async headers() {
-		return [
-			{
-				source: "/:path*",
-				headers,
-			},
-		];
-	},
-	async rewrites() {
-		return [
-			...rewrites,
-			{
-				source: "/telemetry.js",
-				destination: "/api/scripts/telemetry",
-			},
-			{
-				source: "/teams/:teamId/:path((?!settings).*)*",
-				destination: "/:path*",
-			},
-		];
-	},
-	async redirects() {
-		return [...redirects];
-	},
+    return config;
+  },
+  async headers() {
+    return headers;
+  },
+  async rewrites() {
+    return [
+      ...rewrites,
+      {
+        source: '/telemetry.js',
+        destination: '/api/scripts/telemetry',
+      },
+      {
+        source: '/teams/:teamId/:path((?!settings).*)*',
+        destination: '/:path*',
+      },
+    ];
+  },
+  async redirects() {
+    return [...redirects];
+  },
 };
 
 module.exports = config;
