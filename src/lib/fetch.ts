@@ -31,7 +31,45 @@ export async function request(
     },
     body,
   }).then(async res => {
-    const data = await res.json();
+    // Important: some endpoints may legitimately return an empty body (e.g. 204),
+    // and server errors may return non-JSON. Avoid throwing on res.json().
+    const raw = await res.text();
+    const contentType = res.headers.get('content-type') || '';
+
+    let data: any;
+
+    if (raw) {
+      if (
+        contentType.includes('application/json') ||
+        raw.trimStart().startsWith('{') ||
+        raw.trimStart().startsWith('[')
+      ) {
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          // Fall back to a structured error for non-JSON responses.
+          data = { error: { message: raw, status: res.status } };
+        }
+      } else {
+        data = { error: { message: raw, status: res.status } };
+      }
+    }
+
+    // If we got a non-OK response with no payload, still surface a usable error.
+    if (!res.ok && (!data || typeof data !== 'object' || !('error' in data))) {
+      data = {
+        error: {
+          message: res.statusText || 'Request failed',
+          status: res.status,
+        },
+      };
+    }
+
+    // Helpful debug in dev to pinpoint unexpected empty/non-JSON responses.
+    if (process.env.NODE_ENV !== 'production' && !res.ok) {
+      // eslint-disable-next-line no-console
+      console.error('API request failed:', { method, url, status: res.status, data });
+    }
 
     return {
       ok: res.ok,
