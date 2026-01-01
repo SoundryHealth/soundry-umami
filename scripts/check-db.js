@@ -20,6 +20,8 @@ function getSslOptions(connectionUrl) {
   const sslmode = connectionUrl.searchParams.get('sslmode');
   const envSsl = process.env.DATABASE_SSL;
   const envRejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED;
+  const envCa = process.env.DATABASE_SSL_CA;
+  const envCaBase64 = process.env.DATABASE_SSL_CA_BASE64;
 
   const enabled =
     envSsl === '1' ||
@@ -32,7 +34,17 @@ function getSslOptions(connectionUrl) {
 
   const rejectUnauthorized = !(envRejectUnauthorized === '0' || envRejectUnauthorized === 'false');
 
-  return { rejectUnauthorized };
+  let ca = envCa;
+
+  if (!ca && envCaBase64) {
+    try {
+      ca = Buffer.from(envCaBase64, 'base64').toString('utf8');
+    } catch {
+      // ignore
+    }
+  }
+
+  return { rejectUnauthorized, ...(ca ? { ca } : {}) };
 }
 
 const sslOptions = getSslOptions(url);
