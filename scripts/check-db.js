@@ -15,6 +15,19 @@ if (process.env.SKIP_DB_CHECK) {
 
 const url = new URL(process.env.DATABASE_URL);
 
+function stripSslParams(connectionUrl) {
+  const sanitized = new URL(connectionUrl.toString());
+
+  // node-postgres parses `sslmode` into `ssl: {}` which overrides any `ssl` config object
+  // we pass in PoolConfig. To ensure our ssl options (rejectUnauthorized/ca) are respected,
+  // remove ssl-related params from the connectionString and pass ssl options explicitly.
+  for (const key of ['sslmode', 'ssl', 'sslrootcert', 'sslcert', 'sslkey', 'sslca']) {
+    sanitized.searchParams.delete(key);
+  }
+
+  return sanitized.toString();
+}
+
 function getSslOptions(connectionUrl) {
   const ssl = connectionUrl.searchParams.get('ssl');
   const sslmode = connectionUrl.searchParams.get('sslmode');
@@ -70,9 +83,10 @@ function getSslOptions(connectionUrl) {
 }
 
 const sslOptions = getSslOptions(url);
+const connectionString = stripSslParams(url);
 
 const adapter = new PrismaPg(
-  { connectionString: url.toString(), ...(sslOptions ? { ssl: sslOptions } : {}) },
+  { connectionString, ...(sslOptions ? { ssl: sslOptions } : {}) },
   { schema: url.searchParams.get('schema') },
 );
 

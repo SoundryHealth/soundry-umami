@@ -299,6 +299,25 @@ function getSchema() {
   return connectionUrl.searchParams.get('schema');
 }
 
+function stripSslParams(connectionString?: string) {
+  if (!connectionString) return connectionString;
+
+  try {
+    const url = new URL(connectionString);
+
+    // node-postgres parses `sslmode` into `ssl: {}` which overrides any `ssl` config object
+    // we pass in PoolConfig. To ensure our ssl options (rejectUnauthorized/ca) are respected,
+    // remove ssl-related params from the connectionString and pass ssl options explicitly.
+    for (const key of ['sslmode', 'ssl', 'sslrootcert', 'sslcert', 'sslkey', 'sslca']) {
+      url.searchParams.delete(key);
+    }
+
+    return url.toString();
+  } catch {
+    return connectionString;
+  }
+}
+
 function getSslOptions(connectionString?: string) {
   if (!connectionString) return;
 
@@ -355,9 +374,10 @@ function getClient() {
   const logQuery = process.env.LOG_QUERY;
   const schema = getSchema();
   const sslOptions = getSslOptions(url);
+  const connectionString = stripSslParams(url);
 
   const baseAdapter = new PrismaPg(
-    { connectionString: url, ...(sslOptions ? { ssl: sslOptions } : {}) },
+    { connectionString, ...(sslOptions ? { ssl: sslOptions } : {}) },
     { schema },
   );
 
@@ -378,8 +398,12 @@ function getClient() {
   }
 
   const replicaSslOptions = getSslOptions(replicaUrl);
+  const replicaConnectionString = stripSslParams(replicaUrl);
   const replicaAdapter = new PrismaPg(
-    { connectionString: replicaUrl, ...(replicaSslOptions ? { ssl: replicaSslOptions } : {}) },
+    {
+      connectionString: replicaConnectionString,
+      ...(replicaSslOptions ? { ssl: replicaSslOptions } : {}),
+    },
     { schema },
   );
 
