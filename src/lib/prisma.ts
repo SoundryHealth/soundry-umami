@@ -328,7 +328,8 @@ function getSslOptions(connectionString?: string) {
 
     if (!ca && envCaBase64) {
       try {
-        ca = Buffer.from(envCaBase64, 'base64').toString('utf8');
+        const cleaned = envCaBase64.replace(/\s+/g, '');
+        ca = Buffer.from(cleaned, 'base64').toString('utf8');
       } catch {
         // ignore
       }

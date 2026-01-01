@@ -22,6 +22,7 @@ function getSslOptions(connectionUrl) {
   const envRejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED;
   const envCa = process.env.DATABASE_SSL_CA;
   const envCaBase64 = process.env.DATABASE_SSL_CA_BASE64;
+  const debugSsl = process.env.DATABASE_SSL_DEBUG;
 
   const enabled =
     envSsl === '1' ||
@@ -38,10 +39,21 @@ function getSslOptions(connectionUrl) {
 
   if (!ca && envCaBase64) {
     try {
-      ca = Buffer.from(envCaBase64, 'base64').toString('utf8');
+      const cleaned = envCaBase64.replace(/\s+/g, '');
+      ca = Buffer.from(cleaned, 'base64').toString('utf8');
     } catch {
       // ignore
     }
+  }
+
+  if (debugSsl) {
+    console.log('DB SSL debug:', {
+      enabled,
+      rejectUnauthorized,
+      sslmode,
+      hasCa: !!ca,
+      caLooksLikePem: typeof ca === 'string' && ca.includes('BEGIN CERTIFICATE'),
+    });
   }
 
   return { rejectUnauthorized, ...(ca ? { ca } : {}) };
