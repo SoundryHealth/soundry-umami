@@ -15,8 +15,30 @@ if (process.env.SKIP_DB_CHECK) {
 
 const url = new URL(process.env.DATABASE_URL);
 
+function getSslOptions(connectionUrl) {
+  const ssl = connectionUrl.searchParams.get('ssl');
+  const sslmode = connectionUrl.searchParams.get('sslmode');
+  const envSsl = process.env.DATABASE_SSL;
+  const envRejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED;
+
+  const enabled =
+    envSsl === '1' ||
+    envSsl === 'true' ||
+    ssl === '1' ||
+    ssl === 'true' ||
+    (sslmode && sslmode !== 'disable');
+
+  if (!enabled) return undefined;
+
+  const rejectUnauthorized = !(envRejectUnauthorized === '0' || envRejectUnauthorized === 'false');
+
+  return { rejectUnauthorized };
+}
+
+const sslOptions = getSslOptions(url);
+
 const adapter = new PrismaPg(
-  { connectionString: url.toString() },
+  { connectionString: url.toString(), ...(sslOptions ? { ssl: sslOptions } : {}) },
   { schema: url.searchParams.get('schema') },
 );
 
