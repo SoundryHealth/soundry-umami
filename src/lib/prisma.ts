@@ -299,13 +299,67 @@ function getSchema() {
   return connectionUrl.searchParams.get('schema');
 }
 
+function getSslOptions(connectionString?: string) {
+  if (!connectionString) return;
+
+  try {
+    const connectionUrl = new URL(connectionString);
+    const ssl = connectionUrl.searchParams.get('ssl');
+    const sslmode = connectionUrl.searchParams.get('sslmode');
+    const envSsl = process.env.DATABASE_SSL;
+    const envRejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED;
+    const envCa = process.env.DATABASE_SSL_CA;
+    const envCaBase64 = process.env.DATABASE_SSL_CA_BASE64;
+
+    const enabled =
+      envSsl === '1' ||
+      envSsl === 'true' ||
+      ssl === '1' ||
+      ssl === 'true' ||
+      (sslmode && sslmode !== 'disable');
+
+    if (!enabled) return;
+
+    // Match common Postgres semantics:
+    // - sslmode=require: encrypt but do not verify (rejectUnauthorized=false)
+    // - sslmode=verify-ca/verify-full: verify (rejectUnauthorized=true)
+    // If DATABASE_SSL_REJECT_UNAUTHORIZED is set, it always wins.
+    const envRejectUnauthorizedIsSet = envRejectUnauthorized !== undefined;
+
+    const rejectUnauthorized = envRejectUnauthorizedIsSet
+      ? !(envRejectUnauthorized === '0' || envRejectUnauthorized === 'false')
+      : sslmode === 'require' || sslmode === 'prefer'
+        ? false
+        : true;
+
+    let ca = envCa;
+
+    if (!ca && envCaBase64) {
+      try {
+        const cleaned = envCaBase64.replace(/\s+/g, '');
+        ca = Buffer.from(cleaned, 'base64').toString('utf8');
+      } catch {
+        // ignore
+      }
+    }
+
+    return { rejectUnauthorized, ...(ca ? { ca } : {}) };
+  } catch {
+    return;
+  }
+}
+
 function getClient() {
   const url = process.env.DATABASE_URL;
   const replicaUrl = process.env.DATABASE_REPLICA_URL;
   const logQuery = process.env.LOG_QUERY;
   const schema = getSchema();
+  const sslOptions = getSslOptions(url);
 
-  const baseAdapter = new PrismaPg({ connectionString: url }, { schema });
+  const baseAdapter = new PrismaPg(
+    { connectionString: url, ...(sslOptions ? { ssl: sslOptions } : {}) },
+    { schema },
+  );
 
   const baseClient = new PrismaClient({
     adapter: baseAdapter,
@@ -323,7 +377,11 @@ function getClient() {
     return baseClient;
   }
 
-  const replicaAdapter = new PrismaPg({ connectionString: replicaUrl }, { schema });
+  const replicaSslOptions = getSslOptions(replicaUrl);
+  const replicaAdapter = new PrismaPg(
+    { connectionString: replicaUrl, ...(replicaSslOptions ? { ssl: replicaSslOptions } : {}) },
+    { schema },
+  );
 
   const replicaClient = new PrismaClient({
     adapter: replicaAdapter,

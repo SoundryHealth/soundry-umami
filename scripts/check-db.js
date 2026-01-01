@@ -15,8 +15,64 @@ if (process.env.SKIP_DB_CHECK) {
 
 const url = new URL(process.env.DATABASE_URL);
 
+function getSslOptions(connectionUrl) {
+  const ssl = connectionUrl.searchParams.get('ssl');
+  const sslmode = connectionUrl.searchParams.get('sslmode');
+  const envSsl = process.env.DATABASE_SSL;
+  const envRejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED;
+  const envCa = process.env.DATABASE_SSL_CA;
+  const envCaBase64 = process.env.DATABASE_SSL_CA_BASE64;
+  const debugSsl = process.env.DATABASE_SSL_DEBUG;
+
+  const enabled =
+    envSsl === '1' ||
+    envSsl === 'true' ||
+    ssl === '1' ||
+    ssl === 'true' ||
+    (sslmode && sslmode !== 'disable');
+
+  if (!enabled) return undefined;
+
+  // Match common Postgres semantics:
+  // - sslmode=require: encrypt but do not verify (rejectUnauthorized=false)
+  // - sslmode=verify-ca/verify-full: verify (rejectUnauthorized=true)
+  // If DATABASE_SSL_REJECT_UNAUTHORIZED is set, it always wins.
+  const envRejectUnauthorizedIsSet = envRejectUnauthorized !== undefined;
+
+  const rejectUnauthorized = envRejectUnauthorizedIsSet
+    ? !(envRejectUnauthorized === '0' || envRejectUnauthorized === 'false')
+    : sslmode === 'require' || sslmode === 'prefer'
+      ? false
+      : true;
+
+  let ca = envCa;
+
+  if (!ca && envCaBase64) {
+    try {
+      const cleaned = envCaBase64.replace(/\s+/g, '');
+      ca = Buffer.from(cleaned, 'base64').toString('utf8');
+    } catch {
+      // ignore
+    }
+  }
+
+  if (debugSsl) {
+    console.log('DB SSL debug:', {
+      enabled,
+      rejectUnauthorized,
+      sslmode,
+      hasCa: !!ca,
+      caLooksLikePem: typeof ca === 'string' && ca.includes('BEGIN CERTIFICATE'),
+    });
+  }
+
+  return { rejectUnauthorized, ...(ca ? { ca } : {}) };
+}
+
+const sslOptions = getSslOptions(url);
+
 const adapter = new PrismaPg(
-  { connectionString: url.toString() },
+  { connectionString: url.toString(), ...(sslOptions ? { ssl: sslOptions } : {}) },
   { schema: url.searchParams.get('schema') },
 );
 
