@@ -320,9 +320,17 @@ function getSslOptions(connectionString?: string) {
 
     if (!enabled) return;
 
-    const rejectUnauthorized = !(
-      envRejectUnauthorized === '0' || envRejectUnauthorized === 'false'
-    );
+    // Match common Postgres semantics:
+    // - sslmode=require: encrypt but do not verify (rejectUnauthorized=false)
+    // - sslmode=verify-ca/verify-full: verify (rejectUnauthorized=true)
+    // If DATABASE_SSL_REJECT_UNAUTHORIZED is set, it always wins.
+    const envRejectUnauthorizedIsSet = envRejectUnauthorized !== undefined;
+
+    const rejectUnauthorized = envRejectUnauthorizedIsSet
+      ? !(envRejectUnauthorized === '0' || envRejectUnauthorized === 'false')
+      : sslmode === 'require' || sslmode === 'prefer'
+        ? false
+        : true;
 
     let ca = envCa;
 
